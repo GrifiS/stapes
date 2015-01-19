@@ -6,17 +6,17 @@
 // |____/ \__\__,_| .__/ \___||___(_)/ |___/
 //              |_|              |__/
 //
-// (*) a (really) tiny Javascript MVC microframework
+// (*) the Javascript MVC microframework that does just enough
 //
 // (c) Hay Kranen < hay@bykr.org >
 // Released under the terms of the MIT license
 // < http://en.wikipedia.org/wiki/MIT_License >
 //
 // Stapes.js : http://hay.github.com/stapes
-(function() {
+;(function() {
     'use strict';
 
-    var VERSION = "0.7.2-pre";
+    var VERSION = "0.8.1";
 
     // Global counter for all events in all modules (including mixed in objects)
     var guid = 1;
@@ -239,22 +239,33 @@
             silent = silent || false;
 
             // Split the key, maybe we want to remove more than one item
-            var attributes = _.trim(keys).split(" ");
+            var attributes = _.trim(keys).split(" ")
+                ,mutateData = {}
+                ;
 
             // Actually delete the item
             for (var i = 0, l = attributes.length; i < l; i++) {
                 var key = _.trim(attributes[i]);
 
                 if (key) {
+                    // Store data for mutate event
+                    mutateData.key = key;
+                    mutateData.oldValue = _.attr(this._guid)[key];
+
                     delete _.attr(this._guid)[key];
 
                     // If 'silent' is set, do not throw any events
                     if (!silent) {
                         this.emit('change', key);
                         this.emit('change:' + key);
+                        this.emit('mutate', mutateData);
+                        this.emit('mutate:' + key, mutateData);
                         this.emit('remove', key);
                         this.emit('remove:' + key);
                     }
+
+                    // clean up
+                    delete mutateData.oldValue;
                 }
             }
         },
@@ -410,14 +421,6 @@
     };
 
     _.Module.prototype = {
-        // create() is deprecated from 0.8.0
-        create : function() {
-            throw new Error(''.concat(
-                'create() on Stapes modules no longer works from 0.8.0. ',
-                'Check the docs.'
-            ));
-        },
-
         each : function(fn, ctx) {
             var attr = _.attr(this._guid);
             for (var key in attr) {
@@ -445,7 +448,20 @@
 
         get : function(input) {
             if (typeof input === "string") {
-                return this.has(input) ? _.attr(this._guid)[input] : null;
+                // If there is more than one argument, give back an object,
+                // like Underscore's pick()
+                if (arguments.length > 1) {
+                    var results = {};
+
+                    for (var i = 0, l = arguments.length; i < l; i++) {
+                        var key = arguments[i];
+                        results[key] = this.get(key);
+                    }
+
+                    return results;
+                } else {
+                    return this.has(input) ? _.attr(this._guid)[input] : null;
+                }
             } else if (typeof input === "function") {
                 var items = this.filter(input);
                 return (items.length) ? items[0] : null;
@@ -517,13 +533,13 @@
             return this;
         },
 
-        set : function(objOrKey, value, silent) {
+        set : function(objOrKey, valueOrSilent, silent) {
             if (typeof objOrKey === "object") {
                 for (var key in objOrKey) {
-                    _.setAttribute.call(this, key, objOrKey[key]);
+                    _.setAttribute.call(this, key, objOrKey[key], valueOrSilent || false);
                 }
             } else {
-                _.setAttribute.call(this, objOrKey, value, silent || false);
+                _.setAttribute.call(this, objOrKey, valueOrSilent, silent || false);
             }
 
             return this;
@@ -555,17 +571,6 @@
 
     var Stapes = {
         "_" : _, // private helper functions and properties
-
-        // Compatiblity option, this method is deprecated
-        "create" : function() {
-            var instance = _.create( _.Module.prototype );
-            _.addGuid( instance, true );
-
-            // Mixin events
-            Stapes.mixinEvents( instance );
-
-            return instance;
-        },
 
         "extend" : function() {
             return _.extendThis.apply(_.Module.prototype, arguments);

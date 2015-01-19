@@ -12,19 +12,58 @@ if (!Object.keys) {
     };
 }
 
-module("set");
+var EmptyModule = Stapes.subclass();
+
+test("subclassing", function() {
+    var Car = Stapes.subclass();
+    var SuperCar = Car.subclass();
+    var UltraSuperCar = SuperCar.subclass();
+
+    var car = new Car();
+    var superCar = new SuperCar();
+    var ultraSuperCar = new UltraSuperCar();
+
+    ok( car instanceof Car, "direct instancof");
+    ok( superCar instanceof Car, "second inheritance");
+    ok( ultraSuperCar instanceof UltraSuperCar, "third inheritance");
+    ok( !(car instanceof UltraSuperCar), "other way around should not work");
+
+    var ClassOnly = Stapes.subclass({}, true);
+    var c = new ClassOnly();
+    ok( !('get' in c), "No get in classOnly classes");
+    ok( 'subclass' in ClassOnly, "subclass in classOnly classes");
+});
+
+test('extend', function() {
+    var Module = Stapes.subclass();
+    var module = new Module();
+
+    module.extend({
+        'name' : 'foo',
+        'say' : function() {
+            ok(this.name === 'foo');
+        }
+    });
+
+    module.say();
+});
 
 test("change events", function() {
-    expect(8);
+    expect(12);
 
-    var module = Stapes.create();
+    var module = new EmptyModule();
 
     module.set('name', 'Johnny');
 
     module.on({
         'change' : function(key) {
-            ok(key === 'name' || key === 'instrument', 'change event when name is set');
-            if (key === "silent") {
+            ok(
+                key === 'name' ||
+                key === 'instrument' ||
+                key === 'screamingobject'
+            , 'change event when name is set');
+
+            if (key === "silent" || key === "silentobject") {
                 ok(false, "Silent event should not trigger");
             }
         },
@@ -33,8 +72,16 @@ test("change events", function() {
             ok(false, "Silent event should not trigger");
         },
 
+        'change:silentobject' : function() {
+            ok(false, "Silent event should not trigger for object");
+        },
+
         'change:name' : function(value) {
             equal(value, 'Emmylou', 'name attribute changed');
+        },
+
+        'change:screamingobject' : function() {
+            ok(true, "Screaming object triggered");
         },
 
         'mutate' : function(value) {
@@ -57,7 +104,8 @@ test("change events", function() {
         },
 
         'create' : function(key) {
-            equal(key, 'instrument', 'create event on attribute addition');
+            ok(key === 'instrument' || key === 'screamingobject'
+            , 'create event on attribute addition');
         },
 
         'update' : function(key) {
@@ -69,12 +117,20 @@ test("change events", function() {
     module.set('instrument', 'guitar');
     module.set('instrument', 'guitar'); // Change event should only be thrown once!
     module.set('silent', 'silent', true); // silent events should not trigger anything
+
+    module.set({
+        silentobject : true
+    }, true /* no events for silent objects as well */);
+
+    module.set({
+        screamingobject : true
+    }); /* but we do want them for non-silent objects */
 });
 
-module("update");
+
 
 test("update", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
 
     module.set('name', 'Johnny');
     module.set('instruments', {
@@ -110,10 +166,10 @@ test("update", function() {
     }, true /* silent flag */);
 });
 
-module("remove");
+
 
 test("remove", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
     module.set('foo', 'bar');
     module.set('silent', 'silent');
     module.set({
@@ -153,10 +209,10 @@ test("remove", function() {
     ok(module.size() === 0, 'all attributes should be removed');
 })
 
-module("iterators");
+
 
 test("each and map with a single object", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
     module.set({
         'key1': 'value1',
         'key2': 'value2',
@@ -180,8 +236,8 @@ test("each and map with a single object", function() {
 });
 
 test("context of each() is set to current module", function() {
-    var module = Stapes.create();
-    var module2 = Stapes.create();
+    var module = new EmptyModule();
+    var module2 = new EmptyModule();
 
     module.push(1);
 
@@ -203,7 +259,7 @@ test("context of each() is set to current module", function() {
 });
 
 test("each with an array", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
     module.push([
        'value1',
        'value2',
@@ -218,13 +274,15 @@ test("each with an array", function() {
 });
 
 test("filter", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
     module.set({
         'key1': 'value1',
         'key2': 'value2',
         'key3': 'value3'
     });
-    var module2 = Stapes.create().set('key', 'value');
+
+    var module2 = new EmptyModule();
+    module2.set('key', 'value');
 
     module2.filter(function(value, key) {
         ok(value === "value", "Value should be value");
@@ -264,10 +322,10 @@ test("_.typeof", function() {
     ok(Stapes._.typeOf( undefined ) === "undefined", "typeof undefined = undefined");
 });
 
-module("events");
+
 
 test("off", function() {
-    var module = Stapes.create();
+    var module = new EmptyModule();
 
     var handler = function(){};
 
@@ -316,8 +374,8 @@ test("Stapes.mixinEvents", function() {
 });
 
 test("event scope", function() {
-    var module1 = Stapes.create();
-    var module2 = Stapes.create();
+    var module1 = new EmptyModule();
+    var module2 = new EmptyModule();
     var firstDone = false;
 
     module1.on('eventscope', function(data, e) {
@@ -388,7 +446,9 @@ test("events on subclasses", function() {
 });
 
 test("chaining", function() {
-    var module = Stapes.create().set('foo', true);
+    var module = new EmptyModule();
+    module.set('foo', true);
+
     ok(!!module.get && module.get('foo'), "set() should return the object");
     module = module.update('foo', function() { return true; });
     ok(!!module.get && module.get('foo'), "update() should return the object");
@@ -396,6 +456,33 @@ test("chaining", function() {
     ok(!!module.get && module.get('foo') === null, "remove() should return the object");
     module = module.push(true);
     ok(!!module.get && module.size() === 1, "push() should return the object");
+});
+
+test("get", function() {
+    var module = new EmptyModule();
+
+    module.set({
+        'title' : 'Ring of Fire',
+        'artist' : 'Johnny',
+        'instrument' : 'guitar'
+    });
+
+    ok( module.get('artist') === 'Johnny', "simple get");
+    ok( module.get('undefined') === null, "undefined returns null");
+
+    // Note how the function variaty of get() is pretty much useless
+    // because it returns values instead of key/values
+    // For now, we leave it in Stapes, but it might be deprecated
+    ok(
+        module.get(function(a) {
+            return a === 'guitar';
+        }) === 'guitar',
+        "get with a function"
+    );
+
+    // The 'pick' like variety of get() is a lot more useful
+    var props = module.get('artist', 'instrument');
+    deepEqual(props, { 'artist' : 'Johnny', 'instrument' : 'guitar'}, "get works with multiple string arguments");
 });
 
 test("Extending Stapes (plugins)", function() {
@@ -465,18 +552,16 @@ test("remove", function() {
 });
 
 // Not really a bug, but leave this in for documentation purposes
-// Issue #4o
+// Issue #40
 test("private variables", function() {
     var Module = (function() {
-        var val;
-
         return Stapes.subclass({
             constructor : function( v ) {
-                val = v;
+                this._val = v;
             },
 
             getVal : function() {
-                return val;
+                return this._val;
             }
         });
     })();
